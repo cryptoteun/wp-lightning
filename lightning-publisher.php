@@ -131,7 +131,13 @@ class WP_LN_Paywall
     $post_id = get_the_ID();
     $paywall_options = $this->get_paywall_options_for($post_id, $content);
 
-    if (!$paywall_options) {
+    $memberships = wc_memberships_get_user_active_memberships( $user_id );
+
+    if (!empty( $memberships )) {
+      return $content;
+    }
+    else {
+     if (!$paywall_options ) {
       return $content;
     }
 
@@ -162,7 +168,7 @@ class WP_LN_Paywall
     }
 
     return self::format_unpaid($post_id, $paywall_options, $public);
-  }
+  }}
 
   public function add_lnurl_to_rss_item_filter()
   {
@@ -279,7 +285,7 @@ class WP_LN_Paywall
       if (!$paywall_options) {
         return wp_send_json(['error' => 'invalid post'], 404);
       }
-      $memo = get_bloginfo('name') . ' - ' . get_the_title($post_id);
+      $memo = get_the_title($post_id);
       $amount = $paywall_options['amount'];
       $response_data = ['post_id' => $post_id, 'amount' => $amount];
     } elseif (!empty($_POST['all'])) {
@@ -290,11 +296,12 @@ class WP_LN_Paywall
       return wp_send_json(['error' => 'invalid post'], 404);
     }
 
-    $memo = substr($memo, 0, 64);
+    $memo = substr($memo, 0, 56);
     $memo = preg_replace('/[^\w_ ]/', '', $memo);
     $invoice_params = [
-      'memo' => $memo,
+      'memo' => $memo.' ('.$amount.'.00 EUR)',
       'value' => $amount, // in sats
+      'currency' => 'eur',
       'expiry' => 1800,
       'private' => true
     ];
