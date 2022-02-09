@@ -1,13 +1,13 @@
 <?php
 /*
     Plugin Name: Lightning Paywall
-    Version:     0.0.1
+    Version:     0.0.2
     Plugin URI:
     Description: Wordpress content paywall using the lightning network. Directly connected to an LND node
     Author:
     Author URI:
-
     Fork of: https://github.com/ElementsProject/wordpress-lightning-publisher
+    Change: Added functionality to filter paywal from members and calculate euros.
 */
 
 if (!defined('ABSPATH')) exit;
@@ -29,6 +29,63 @@ use \Firebase\JWT;
 
 define('WP_LN_PAYWALL_JWT_KEY', hash_hmac('sha256', 'wp-lightning-paywall', AUTH_KEY));
 define('WP_LN_PAYWALL_JWT_ALGORITHM', 'HS256');
+
+
+class Utils {
+    public static function convert_to_satoshis($amount, $currency) {
+        if(strtolower($currency) !== 'btc') {
+            error_log($amount . " " . $currency);
+            $c    = new CurlWrapper();
+            $resp = $c->get('https://blockchain.info/tobtc', array(
+                'currency' => $currency,
+                'value'    => $amount
+            ), array());
+
+            if ($resp['status'] != 200) {
+                throw new \Exception('Blockchain.info request for currency conversion failed. Got status ' . $resp['status']);
+            }
+
+            return (int) round($resp['response'] * 100000000);
+        }
+        else {
+            return intval($amount * 100000000);
+        }
+    }
+}
+
+class CurlWrapper {
+
+    private function request($method, $url, $params, $headers, $data) {
+        $url = add_query_arg($params, $url);
+        $r = wp_remote_request($url, array(
+            'method' => $method,
+            'headers' => $headers,
+            'body' => $data ? json_encode($data) : ''
+        ));
+
+        if (is_wp_error($r)) {
+            error_log('WP_Error: '.$r->get_error_message());
+            return array(
+                'status' => 500,
+                'response' => $r->get_error_message()
+            );
+        }
+
+        return array(
+            'status' => $r['response']['code'],
+            'response' => json_decode($r['body'], true)
+        );
+    }
+
+    public function get($url, $params, $headers) {
+        return $this->request('GET', $url, $params, $headers, null);
+    }
+
+    public function post($url, $params, $data, $headers) {
+        return $this->request('POST', $url, $params, $headers, $data);
+    }
+}
+
 
 class WP_LN_Paywall
 {
@@ -134,10 +191,16 @@ class WP_LN_Paywall
     $memberships = wc_memberships_get_user_active_memberships( $user_id );
 
     if (!empty( $memberships )) {
-      return $content;
+      return str_replace('[lnd-amount]','',$content);
     }
+
+    //if (is_user_logged_in()) {
+    //  return str_replace('[lnd-amount]','',$content);
+    //}
+
     else {
-     if (!$paywall_options ) {
+
+    if (!$paywall_options) {
       return $content;
     }
 
@@ -285,8 +348,12 @@ class WP_LN_Paywall
       if (!$paywall_options) {
         return wp_send_json(['error' => 'invalid post'], 404);
       }
+
+      $eur_price = 2.50;
       $memo = get_the_title($post_id);
-      $amount = $paywall_options['amount'];
+	  $get_eur_sats = Utils::convert_to_satoshis($eur_price, 'eur');
+
+      $amount = $get_eur_sats;
       $response_data = ['post_id' => $post_id, 'amount' => $amount];
     } elseif (!empty($_POST['all'])) {
       $memo = get_bloginfo('name');
@@ -299,9 +366,8 @@ class WP_LN_Paywall
     $memo = substr($memo, 0, 56);
     $memo = preg_replace('/[^\w_ ]/', '', $memo);
     $invoice_params = [
-      'memo' => $memo.' ('.$amount.'.00 EUR)',
+      'memo' => $memo .' ('.$eur_price.' EUR)',
       'value' => $amount, // in sats
-      'currency' => 'eur',
       'expiry' => 1800,
       'private' => true
     ];
