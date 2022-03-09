@@ -349,7 +349,7 @@ class WP_LN_Paywall
         return wp_send_json(['error' => 'invalid post'], 404);
       }
 
-      $eur_price = 2.50;
+      $eur_price = 1.95;
       $memo = get_the_title($post_id);
 	  $get_eur_sats = Utils::convert_to_satoshis($eur_price, 'eur');
 
