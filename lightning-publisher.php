@@ -188,7 +188,12 @@ class WP_LN_Paywall
     $post_id = get_the_ID();
     $paywall_options = $this->get_paywall_options_for($post_id, $content);
 
-    $memberships = wc_memberships_get_user_active_memberships( $user_id );
+    if( function_exists('wc_memberships_get_user_active_memberships')) {
+        $memberships = wc_memberships_get_user_active_memberships( $user_id );
+    } else {
+        $memberships = 0;
+    }
+
 
     if (!empty( $memberships )) {
       return str_replace('[lnd-amount]','',$content);
