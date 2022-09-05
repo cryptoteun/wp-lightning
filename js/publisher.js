@@ -76,9 +76,9 @@ window.addEventListener("DOMContentLoaded", function () {
         invoice.payment_request
       }">
       <br />
-      <a href="lightning:${
+<p style="font-size: small;word-break: break-all;">${
         invoice.payment_request
-      }">${invoice.payment_request.substr(0, 36)}...</a>
+      }</p>
       </div>`;
   }
 
